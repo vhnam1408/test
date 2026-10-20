@@ -1,19 +1,28 @@
 cmake_minimum_required(VERSION 3.20)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Project: EduSchedule-Agent (Milestone G1: Architecture Freeze - TASK-05)
+# Project: EduSchedule-Agent
 # ══════════════════════════════════════════════════════════════════════════════
 project(
     ai_agent
     VERSION     1.0.0
-    DESCRIPTION "EduSchedule-Agent: Milestone G1 - Architecture Freeze (TASK-05)"
+    DESCRIPTION "EduSchedule-Agent: academic scheduling assistant"
     LANGUAGES   CXX
 )
 
+include(CTest)
+
 # ══════════════════════════════════════════════════════════════════════════════
-# C++ Standard — C++23 (Backward-compatible with C++20)
+# C++ Standard — C++23 (Tự động fallback C++20 nếu compiler trên Kaggle/Linux chưa hỗ trợ)
 # ══════════════════════════════════════════════════════════════════════════════
-set(CMAKE_CXX_STANDARD          23)
+include(CheckCXXCompilerFlag)
+check_cxx_compiler_flag("-std=c++23" COMPILER_SUPPORTS_CXX23)
+check_cxx_compiler_flag("-std=c++2b" COMPILER_SUPPORTS_CXX2B)
+if(COMPILER_SUPPORTS_CXX23 OR COMPILER_SUPPORTS_CXX2B)
+    set(CMAKE_CXX_STANDARD 23)
+else()
+    set(CMAKE_CXX_STANDARD 20)
+endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS        OFF)
 
@@ -57,6 +66,35 @@ add_executable(ai_agent
     src/main.cpp
     src/client/ollama_client.cpp
 )
+
+if(BUILD_TESTING)
+    add_executable(agent_loop_test tests/agent_loop_test.cpp)
+    target_include_directories(agent_loop_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    add_test(NAME agent_loop COMMAND agent_loop_test)
+
+    add_executable(ollama_client_smoke_test
+        tests/ollama_client_smoke_test.cpp
+        src/client/ollama_client.cpp
+    )
+    target_include_directories(ollama_client_smoke_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    target_link_libraries(ollama_client_smoke_test PRIVATE CURL::libcurl)
+    add_test(NAME ollama_client COMMAND ollama_client_smoke_test)
+
+    # Python chỉ cần cho server giả lập khi test, không cần để chạy ứng dụng.
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME ollama_http
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/tests/ollama_http_test.py
+                $<TARGET_FILE:ai_agent> $<TARGET_FILE:ollama_client_smoke_test>)
+    endif()
+endif()
 
 target_link_libraries(ai_agent PRIVATE
     CURL::libcurl

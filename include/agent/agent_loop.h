@@ -28,6 +28,8 @@ struct FinalAnswerAction {
 // Quyết định của AI: Chỉ có thể là Gọi Tool HOẶC Trả lời xong
 using AgentDecision = std::variant<ToolCallAction, FinalAnswerAction>;
 
+enum class StepStatus { Completed, ThinkingFailed, LoopBlocked };
+
 // Dữ liệu ghi lại diễn biến của từng bước chạy
 struct StepEvent {
     int           step_index{0};
@@ -37,6 +39,9 @@ struct StepEvent {
     long long     duration_ms{0};
     bool          is_loop_warning{false};
     std::string   loop_message;
+    // result là đầu ra của Tool hoặc câu trả lời cuối; observation là đầu vào bước.
+    std::string   result;
+    StepStatus    status{StepStatus::Completed};
 };
 
 // Hàm callback để bên ngoài (Harness/Giao diện) có thể theo dõi AI chạy
@@ -65,6 +70,15 @@ public:
 
         for (int step = 1; step <= max_steps_; ++step) {
             const auto step_start = std::chrono::steady_clock::now();
+            // Mỗi bước phát đúng một sự kiện, sau khi có kết quả.
+            auto emit_step = [&](const AgentDecision& decision, const std::string& result,
+                                 StepStatus status, bool warning, const std::string& message) {
+                if (!step_hook_) return;
+                const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - step_start).count();
+                step_hook_({step, "", current_observation, decision, elapsed,
+                            warning, message, result, status});
+            };
 
             // Bước 1: Quan sát thông tin hiện tại
             current_observation = observe(current_observation);
@@ -73,6 +87,8 @@ public:
             auto decision_opt = think(step, current_observation);
             if (!decision_opt) {
                 final_answer = "Loi: AI khong the suy nghi tiep tai buoc " + std::to_string(step);
+                emit_step(FinalAnswerAction{final_answer}, final_answer,
+                          StepStatus::ThinkingFailed, false, "");
                 onFinished(final_answer);
                 return final_answer;
             }
@@ -88,6 +104,8 @@ public:
 
                 if (loop_check.isCritical()) {
                     final_answer = "Dung khan cap: " + loop_check.message;
+                    emit_step(decision, final_answer, StepStatus::LoopBlocked,
+                              false, loop_check.message);
                     onFinished(final_answer);
                     return final_answer;
                 }
@@ -97,34 +115,20 @@ public:
                 }
             }
 
-            const auto step_end = std::chrono::steady_clock::now();
-            const auto duration_ms =
-                std::chrono::duration_cast<std::chrono::milliseconds>(step_end - step_start).count();
-
-            // Báo cáo diễn biến bước này cho người quan sát
-            if (step_hook_) {
-                step_hook_({
-                    step,
-                    (std::holds_alternative<FinalAnswerAction>(decision) ? "Dua ra dap an" : "Goi cong cu"),
-                    current_observation,
-                    decision,
-                    duration_ms,
-                    is_loop_warning,
-                    loop_msg
-                });
-            }
-
             // Bước 3: Kiểm tra xem AI đã hoàn thành xong việc chưa
             if (isTerminal(decision, step)) {
                 final_answer = std::holds_alternative<FinalAnswerAction>(decision)
                     ? std::get<FinalAnswerAction>(decision).answer
                     : "Hoan thanh cong viec tai buoc " + std::to_string(step);
+                emit_step(decision, final_answer, StepStatus::Completed, is_loop_warning, loop_msg);
                 onFinished(final_answer);
                 return final_answer;
             }
 
             // Bước 4: Thực thi hành động gọi Tool và thu thập kết quả
-            current_observation = act(decision);
+            auto result = act(decision);
+            emit_step(decision, result, StepStatus::Completed, is_loop_warning, loop_msg);
+            current_observation = std::move(result);
             if (is_loop_warning) {
                 current_observation += "\n[Luu y] " + loop_msg + " - Hay thu cach khac!";
             }
@@ -169,8 +173,8 @@ protected:
 
     // Kiểm tra xem vòng lặp đã đến lúc kết thúc chưa
     virtual bool isTerminal(const AgentDecision& decision, int current_step) {
-        if (std::holds_alternative<FinalAnswerAction>(decision)) return true;
-        return current_step >= max_steps_;
+        (void)current_step;
+        return std::holds_alternative<FinalAnswerAction>(decision);
     }
 
     // Xử lý sau khi vòng lặp kết thúc hoàn toàn
