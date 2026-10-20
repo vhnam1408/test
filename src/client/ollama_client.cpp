@@ -202,14 +202,16 @@ size_t OllamaClient::write_callback(
 
 CurlSlist OllamaClient::build_headers() const
 {
-    curl_slist* raw = nullptr;
-    raw = curl_slist_append(raw, "Content-Type: application/json");
-    raw = curl_slist_append(raw, "Accept: application/json");
-    // Hỗ trợ bypass cảnh báo khi tunnel Ollama từ Kaggle / Colab qua ngrok
-    raw = curl_slist_append(raw, "ngrok-skip-browser-warning: 1");
-    raw = curl_slist_append(raw, "User-Agent: EduSchedule-Agent/1.0");
-    if (!raw) throw std::runtime_error("Khong tao duoc HTTP header.");
-    return CurlSlist(raw);
+    CurlSlist headers;
+    for (const char* text : {"Content-Type: application/json", "Accept: application/json",
+                             "ngrok-skip-browser-warning: 1", "User-Agent: EduSchedule-Agent/1.0"}) {
+        // append trả về đầu danh sách. Giữ danh sách cũ nếu cấp phát thất bại.
+        curl_slist* updated = curl_slist_append(headers.get(), text);
+        if (!updated) throw std::runtime_error("Khong tao duoc HTTP header.");
+        headers.release();
+        headers.reset(updated);
+    }
+    return headers;
 }
 
 OllamaClient::HttpResult

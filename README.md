@@ -10,7 +10,8 @@ hay hệ thống Agent hoàn chỉnh. Các module đã có vẫn được giữ 
 
 ## Chuẩn bị và build
 
-Cần CMake 3.20+, trình biên dịch hỗ trợ C++23 và libcurl.
+Cần CMake 3.20+, libcurl và compiler hỗ trợ C++20 trở lên. CMake hiện ưu tiên C++23
+và có nhánh chọn C++20; build thành công chưa chứng minh các kỹ thuật C++23/26 cuối kỳ đã đủ.
 Thư viện nlohmann/json đã có trong thư mục `include/`.
 Ollama và model chỉ cần khi chạy demo thật. SQLite là thư viện tùy chọn cho phần sau.
 
@@ -130,58 +131,8 @@ và kết quả của lần chạy Ollama thực tế.
 Giao diện Agent được mô tả thêm trong `docs/agent_loop_contract.md`.
 `docs/technical_spike.md` giải thích HTTP/JSON/Base64 và cách nghiệm thu TASK-01.
 
-## Hướng dẫn chạy thử nghiệm trên Kaggle (GPU Miễn Phí)
+## Tham khảo triển khai backend về sau
 
-Dự án cung cấp sẵn file Jupyter Notebook [`kaggle_task01_demo.ipynb`](kaggle_task01_demo.ipynb) để chạy trực tiếp trên Kaggle.
-
-### Cách 1: Chạy trực tiếp toàn bộ trên Kaggle Notebook
-1. Mở Kaggle, tạo một Notebook mới (bật **GPU T4 x2** hoặc **P100**, bật **Internet: On**).
-2. Tải file `kaggle_task01_demo.ipynb` lên Kaggle hoặc gõ các lệnh sau trong terminal/cell:
-   ```bash
-   # Cài đặt công cụ build & thư viện curl
-   !apt-get update -qq && apt-get install -y -qq libcurl4-openssl-dev cmake g++
-   
-   # Cài đặt và bật Ollama
-   !curl -fsSL https://ollama.com/install.sh | sh
-   !ollama serve &
-   !sleep 5
-   
-   # Tải model text và vision
-   !ollama pull qwen2.5:0.5b
-   !ollama pull moondream
-   
-   # Clone code và build
-   !git clone https://github.com/vhnam1408/test.git
-   %cd test
-   !cmake -B build -DCMAKE_BUILD_TYPE=Release
-   !cmake --build build
-   !ctest --test-dir build --output-on-failure
-   
-   # Chạy test Task 1
-   !./build/ai_agent --model qwen2.5:0.5b --text assets/chat_prompt.txt --output output/kaggle_text.json
-   !./build/ai_agent --model moondream --image assets/timetable.png --output output/kaggle_image.json
-   ```
-
-### Cách 2: Host Ollama trên Kaggle và kết nối từ bên ngoài qua Ngrok
-1. Chạy Ollama trên Kaggle và mở tunnel bằng pyngrok:
-   ```python
-   !pip install pyngrok
-   from pyngrok import ngrok
-   ngrok.set_auth_token("YOUR_NGROK_AUTHTOKEN")
-   public_url = ngrok.connect(11434, "http")
-   print("Ollama Public URL:", public_url)
-   ```
-2. Trên máy cục bộ, chạy `ai_agent` truyền URL ngrok:
-   ```bash
-   ./build/ai_agent --url "https://xxxx.ngrok-free.app" --model qwen2.5:0.5b --text assets/chat_prompt.txt --insecure
-   ```
-   *(Header `ngrok-skip-browser-warning: 1` đã được tích hợp sẵn trong mã nguồn để tự động vượt qua trang cảnh báo của ngrok).*
-
----
-
-### Trả lời câu hỏi nghiên cứu: "Tại sao Kaggle cung cấp GPU miễn phí?"
-Kaggle được Google mua lại vào ngày **08/03/2017**. Google duy trì chính sách GPU miễn phí vì:
-1. **Onboarding dịch vụ đám mây (Google Cloud / GCP Vertex AI):** Kaggle là cổng thu hút hơn 15 triệu nhà phát triển; khi bài toán mở rộng vượt mức giới hạn miễn phí, người dùng tự nhiên chuyển đổi sang hạ tầng trả phí của Google Cloud.
-2. **Hệ sinh thái mở và cộng đồng:** Tạo kho lưu trữ khổng lồ về datasets, notebooks và mã nguồn mở.
-3. **Quảng bá công nghệ của Google:** Phổ cập Gemma, Gemini API, TensorFlow, JAX đến cộng đồng.
-4. **Tối ưu năng lực điện toán nhàn rỗi:** Tận dụng công suất GPU dư thừa tại các trung tâm dữ liệu toàn cầu của Google (Preemptible/Spot Compute).
+Notebook `kaggle_task01_demo.ipynb` được giữ làm tài liệu tham khảo có sẵn.
+Các bước Kaggle/ngrok không nằm trong lần chỉnh TASK-01 này và chưa được chạy xác minh
+trong lần chỉnh này. Để học luồng Client, nên chạy Ollama cục bộ theo các lệnh ở trên trước.

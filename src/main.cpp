@@ -102,7 +102,9 @@ int main(int argc, char* argv[]) {
             else throw std::runtime_error("Tham so khong hop le: " + option);
         }
         if (config.model_name.empty()) throw std::runtime_error("Can truyen --model TEN_MODEL.");
-        if (text_path.empty() == image_path.empty()) {
+        bool has_text = !text_path.empty();
+        bool has_image = !image_path.empty();
+        if ((has_text && has_image) || (!has_text && !has_image)) {
             throw std::runtime_error("Chon dung mot dau vao: --text hoac --image.");
         }
 
@@ -121,6 +123,7 @@ int main(int argc, char* argv[]) {
         CurlGlobalGuard curl_guard;
         OllamaClient client(config);
         std::cout << "Dang goi model: " << config.model_name << '\n';
+        // Text và ảnh đều dùng chung hàm chat(), đúng giao diện trong đề bài.
         LLMResponse response = client.chat({message});
         if (!response.success) {
             std::cerr << "Loi " << to_string(response.error_type.value_or(LLMErrorType::HttpError))
