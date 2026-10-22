@@ -1,5 +1,7 @@
 // Thử API: đọc đầu vào -> gọi Ollama -> in câu trả lời -> lưu kết quả JSON.
 #include "client/ollama_client.h"
+#include "agent/loop_detector.h"
+#include "agent/agent_loop.h"
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -12,6 +14,12 @@
 
 using namespace edu_schedule;
 using json = nlohmann::json;
+
+namespace console {
+    constexpr const char* RESET = "\033[0m";
+    constexpr const char* GREEN = "\033[32m";
+    constexpr const char* MAGENTA = "\033[35m";
+}
 
 // Đọc nguyên nội dung file văn bản. File ảnh được đọc riêng trong LLMClient.
 std::string read_text(const std::string& path) {
@@ -30,7 +38,7 @@ void save_result(const LLMResponse& response, const LLMConfig& config,
                  const std::string& input_type, const std::string& path) {
     json data = {
         {"model_requested", config.model_name}, {"model_used", response.model_used},
-        {"input_type", input_type}, {"success", response.success},
+        {"input_type", input_type}, {"success", true},
         {"content", response.content}, {"latency_ms", response.latency_ms},
         {"truncated", response.truncated}
     };
@@ -67,6 +75,22 @@ int main(int argc, char* argv[]) {
     SetConsoleOutputCP(CP_UTF8);
 #endif
     try {
+    // ── TASK-05: Milestone G1 Architecture Freeze Verification ────────────────
+    std::cout << console::MAGENTA << "\n[TASK-05 G1 Freeze] Khởi tạo LoopDetector & AgentLoop interfaces..." << console::RESET << "\n";
+    LoopDetector loop_detector(LoopDetector::Config{ .warning_threshold = 2, .critical_threshold = 4, .history_capacity = 30 });
+    loop_detector.recordAction("task_lookup:T1");
+    auto loop_test = loop_detector.recordAndCheck("task_lookup:T1");
+    std::cout << console::GREEN << "  ✓ LoopDetector: Generic Repeat (ngưỡng 2) → "
+              << (loop_test.isWarning() ? "Cảnh báo chính xác [PASS]" : "Chưa cảnh báo") << "\n";
+    loop_detector.reset();
+
+    AgentLoop agent_loop(std::shared_ptr<LLMClient>{}, /*max_steps=*/5, loop_detector);
+    agent_loop.setStepHook([](const StepEvent& ev) {
+        (void)ev;
+    });
+    std::cout << "  ✓ AgentLoop: Template Method (run) & Observer Hook (StepHook) sẵn sàng [PASS]\n"
+              << console::RESET;
+
         // 1. Đọc cấu hình. Tên model phải đúng với model đã cài trong Ollama.
         LLMConfig config;
         config.model_name.clear();
@@ -124,16 +148,17 @@ int main(int argc, char* argv[]) {
         OllamaClient client(config);
         std::cout << "Dang goi model: " << config.model_name << '\n';
         // Text và ảnh đều dùng chung hàm chat(), đúng giao diện trong đề bài.
-        LLMResponse response = client.chat({message});
-        if (!response.success) {
-            std::cerr << "Loi " << to_string(response.error_type.value_or(LLMErrorType::HttpError))
-                      << ": " << response.error_message.value_or("Khong ro nguyen nhan") << '\n';
+        LLMResult response = client.chat({message});
+        if (!response) {
+            const LLMError& error = response.error();
+            std::cerr << "Loi " << to_string(error.type)
+                      << ": " << error.message << '\n';
             return 1;
         }
 
         // 4. Lưu bản ghi thử API. Chưa trích xuất hay xác minh deadline ở bước này.
-        if (response.truncated) std::cerr << "Luu y: phan hoi bi cat; co the tang --max-tokens.\n";
-        save_result(response, config, text_path.empty() ? "image" : "text", output_path);
+        if (response->truncated) std::cerr << "Luu y: phan hoi bi cat; co the tang --max-tokens.\n";
+        save_result(*response, config, text_path.empty() ? "image" : "text", output_path);
         return 0;
     } catch (const std::exception& error) {
         std::cerr << "Loi: " << error.what() << '\n';

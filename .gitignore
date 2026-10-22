@@ -1,8 +1,5 @@
 # Compiled output
 build/
-build*/
-.review*/
-.ipynb_checkpoints/
 out/
 *.exe
 *.out
