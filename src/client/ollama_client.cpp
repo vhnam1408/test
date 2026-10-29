@@ -252,7 +252,7 @@ OllamaClient::http_post(const std::string& url, const std::string& json_body)
     curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS,       m_config.timeout_ms);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, m_config.connect_timeout_ms);
 
-    // SSL (khi dùng Ngrok/Colab với self-signed cert)
+    // Xác minh HTTPS của server, bao gồm địa chỉ ngrok.
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, m_config.verify_ssl ? 1L : 0L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, m_config.verify_ssl ? 2L : 0L);
 
@@ -288,8 +288,15 @@ LLMResult OllamaClient::parse_ollama_response(
 {
     if (result.curl_code != CURLE_OK) {
         const LLMErrorType err_type = map_curl_error(result.curl_code);
-        const std::string  err_msg  =
+        std::string err_msg =
             std::string("[libcurl] ") + curl_easy_strerror(result.curl_code);
+        if (err_type == LLMErrorType::Timeout) {
+            err_msg += " | Qua thoi gian cho. Kiem tra model da san sang; "
+                       "co the tang timeout_ms hoac giam max_tokens.";
+        } else {
+            err_msg += " | Kiem tra Internet, URL Ollama va phien Kaggle/ngrok con chay. "
+                       "localhost tren Windows chi tro den may Windows.";
+        }
         return make_error(err_type, err_msg, 0, latency_ms);
     }
 

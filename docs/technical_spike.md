@@ -24,9 +24,7 @@ Bộ trích xuất deadline và xác nhận ngày mơ hồ thuộc các task sau
 1. `main()` đọc file văn bản hoặc đọc ảnh và chuyển thành Base64.
 2. Dữ liệu được đặt vào `ChatMessage`.
 3. `OllamaClient::chat()` gọi ba hàm: tạo payload, gửi HTTP, đọc phản hồi.
-4. `main()` kiểm tra `LLMResult` (`std::expected`, cập nhật TASK-09); thành công thì
-   đọc `result->content`, in và ghi bản thử vào file JSON. Thất bại thì đọc
-   `result.error()`. Trường `success` trong file JSON đầu ra vẫn được giữ.
+4. `main()` kiểm tra `success`; nếu thành công thì in và ghi bản thử vào file JSON.
 
 Ví dụ request minh họa:
 

@@ -43,7 +43,7 @@ struct LLMConfig {
     int         max_tokens          = 2048;   ///< Số dương: giới hạn token; <= 0: dùng mặc định server
     long        timeout_ms          = 120000; ///< Timeout tổng (ms)
     long        connect_timeout_ms  = 10000;  ///< Timeout kết nối riêng (ms)
-    bool        verify_ssl          = true;   ///< false khi dùng Ngrok/Colab self-signed cert
+    bool        verify_ssl          = true;   ///< Xác minh chứng chỉ HTTPS, kể cả URL ngrok
     bool        follow_redirect     = true;   ///< Theo HTTP redirect (Ngrok hay redirect)
 };
 

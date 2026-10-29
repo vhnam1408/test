@@ -13,7 +13,7 @@ https://docs.google.com/spreadsheets/d/1D1W44CMZDrowgiCz07pfPnjUgCwxdoTfitrn-15s
 
 | File | Công dụng |
 |---|---|
-| `include/client/llm_client.h` | Giao diện LLM, cấu hình và tin nhắn; TASK-09 cập nhật kết quả sang `std::expected`. |
+| `include/client/llm_client.h` | Giao diện LLM, cấu hình, tin nhắn và kết quả. Giữ nguyên API của TASK-01. |
 | `src/client/llm_client.h` | Header chuyển tiếp theo đường dẫn đầu ra trong sheet. Không định nghĩa thêm lớp. |
 | `include/agent/agent_loop.h` | Khai báo quyết định, sự kiện, callback và các hàm của Agent. |
 | `src/agent/agent_loop.h` | Chuyển tiếp đến header Agent chính. |
@@ -114,9 +114,8 @@ lời gọi callback; Harness muốn lưu thì copy sang cấu trúc trajectory 
 
 ## 7. Giới hạn và những phần làm sau
 
-- TASK-09 đã chuyển `chat()` sang `LLMResult = std::expected<LLMResponse, LLMError>`.
-  Agent đọc `result->content` khi thành công; khi lỗi, truyền loại lỗi và thông báo
-  vào `StepEvent.error_message`. `ToolResult` của Tool vẫn giữ nguyên.
+- TASK-09: thống nhất việc dùng `std::expected` với API Client hiện có; lần này
+  không đổi kiểu trả về Client vì sẽ ảnh hưởng TASK-01.
 - TASK-13: parser JSON thực tế và multimodal. Parser mặc định hiện vẫn đọc
   `Action:` và dùng arguments `"{}"`; chưa tự đọc lệnh JSON từ model.
 - TASK-25: hoàn thiện ReAct, lịch sử, trạng thái kết thúc và tích hợp thật.
@@ -148,31 +147,3 @@ ctest --test-dir build -R agent_contract -V
 Kiểm thử xác nhận: kết quả Tool đi đến LLM và hook, giới hạn bước, Tool bị chặn,
 Tool lỗi/exception, thiếu Registry, lỗi LLM, dừng do lặp và reset giữa hai lượt.
 Các test này kiểm tra giao diện và hành vi vòng lặp, không xác nhận mô hình thật.
-
-## 9. Cách gọi Client sau khi cập nhật TASK-09
-
-```cpp
-LLMResult result = client.chat("Xin chao");
-if (!result) {
-    // Có lỗi: không đọc result->content ở nhánh này.
-    std::cerr << to_string(result.error().type)
-              << ": " << result.error().message;
-    return;
-}
-std::cout << result->content;
-```
-
-`LLMResult` là `std::expected<LLMResponse, LLMError>`. Thành công giữ nội dung,
-token và thời gian trong `LLMResponse`; lỗi giữ `type`, `message`, `http_status`
-và `latency_ms` trong `LLMError`. Không còn `LLMResponse.success`, `error_type`
-hoặc `error_message`. Trường `success` trong file JSON của chương trình thử API
-vẫn giữ nguyên để tương thích đầu ra cũ. `ToolResult` không đổi.
-
-`chat()` kiểm tra cấu hình và xử lý lỗi HTTP, timeout, kết nối, đường truyền,
-JSON sai cú pháp hoặc schema. `max_tokens > 0` gửi thành `options.num_predict`;
-giá trị không dương tiếp tục dùng mặc định của server. Cấu hình temperature phải
-hữu hạn trong 0..2; hai timeout phải dương. Lỗi khởi tạo tài nguyên CURL ở
-constructor vẫn có thể ném exception, nên chương trình giữ khối try/catch ngoài.
-
-Test HTTP sử dụng server giả trên localhost, có kiểm tra phục hồi sau lỗi và
-thay đổi cấu hình. Chưa xác nhận gọi model Ollama thật trong lần sửa TASK-09 này.
